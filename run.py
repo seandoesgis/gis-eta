@@ -29,23 +29,23 @@ acs_state_county_pairs = [
 ]
 
 
-# db.create_database(dbname)
+db.create_database(dbname)
 
-# db.create_schemas(dbname, schemas)
+db.create_schemas(dbname, schemas)
 
-# db.create_extensions(dbname)
+db.create_extensions(dbname)
 
-# census.load_acs_data(acs_variables, acs_year, acs_state_county_pairs, dbname, schemas[0])
+census.load_acs_data(acs_variables, acs_year, acs_state_county_pairs, dbname, schemas[0])
 
-# census.load_lodes_data(dbname, schemas[0])
+census.load_lodes_data(dbname, schemas[0])
 
-# with open(gis_sources, 'r') as config_file:
-#     urls_config = json.load(config_file)
-# urls = urls_config['urls']
-# for url_key, url_value in urls.items():
-#     load.load_gis_data(dbname, schemas[0], url_key, url_value, crs)
+with open(gis_sources, 'r') as config_file:
+    urls_config = json.load(config_file)
+urls = urls_config['urls']
+for url_key, url_value in urls.items():
+    load.load_gis_data(dbname, schemas[0], url_key, url_value, crs)
 
-# load.load_matrix('source/AM_matrix_i_put.csv', 'source/AM_matrix_o_put.csv', dbname, schemas[0], 'matrix_45min')
+load.load_matrix('source/AM_matrix_i_put.csv', 'source/AM_matrix_o_put.csv', dbname, schemas[0], 'matrix_45min')
 
 db.do_analysis(dbname, sql)
 
