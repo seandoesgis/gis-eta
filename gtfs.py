@@ -70,7 +70,7 @@ def download_and_load_septagtfs(dbname, gtfs_url):
 
 def download_and_load_njtgtfs(dbname, gtfs_url):
     """
-    downloads, extracts, loads septa gtfs into the db
+    downloads, extracts, loads njtransit gtfs into the db
     """
     print("\t -> Loading NJT GTFS data...")
     gtfs_type = gtfs_url.rsplit('/', 1)[-1]
@@ -106,7 +106,7 @@ def download_and_load_njtgtfs(dbname, gtfs_url):
 
 def download_and_load_patcogtfs(dbname, gtfs_url):
     """
-    downloads, extracts, loads septa gtfs into the db
+    downloads, extracts, loads patco gtfs into the db
     """
     print("\t -> Loading PATCO GTFS data...")
     response = requests.get(gtfs_url)
