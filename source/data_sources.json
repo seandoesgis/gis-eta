@@ -1,5 +1,5 @@
 {
-    "urls": {
+    "gis_urls": {
         "census_blockgroups": "https://arcgis.dvrpc.org/portal/rest/services/Demographics/Census_BlockGroups_2020/FeatureServer/0/query?where=dvrpc_reg='y'&outFields=geoid&outSR=26918&f=geojson",
         "taz": "https://arcgis.dvrpc.org/portal/rest/services/Demographics/taz/FeatureServer/0/query?where=dvrpc='yes'&outFields=taz&outSR=26918&f=geojson",
         "schools_post_secondary": "https://arcgis.dvrpc.org/portal/rest/services/Structures/schools_post_secondary/FeatureServer/0/query?where=1=1&outFields=name&outSR=26918&f=geojson",
@@ -9,6 +9,11 @@
         "grocery_store": "https://arcgis.dvrpc.org/portal/rest/services/Structures/places/FeatureServer/0/query?where=primary_category+LIKE+%27%25grocery%25%27&outFields=primary_name,confidence&outSR=26918&f=geojson",
         "open_space": "https://arcgis.dvrpc.org/portal/rest/services/Planning/DVRPC_ProtectedOpenSpace2020/FeatureServer/0/query?where=1=1&outFields=os_type&outSR=26918&f=geojson",
         "trails": "https://arcgis.dvrpc.org/portal/rest/services/Transportation/circuittrails/FeatureServer/0/query?where=circuit+in+%28%27Existing%27%2C+%27In+Progress%27%29&outFields=circuit,name&outSR=26918&f=geojson"
+    },
+    "gtfs_urls": {
+        "septa": "https://www3.septa.org/developer/gtfs_public.zip",
+        "nj_transit": ["https://www.njtransit.com/bus_data.zip", "https://www.njtransit.com/rail_data.zip"],
+        "patco": "http://www.ridepatco.org/developers/PortAuthorityTransitCorporation.zip"
     }
 }
 

@@ -20,6 +20,9 @@ Builds a PostgreSQL database, loads necessary data, completes analysis
 ### Transit Accessibility
 - AM Transit 45 minute TAZ Matrix
 - Essential Services in 45 minute TAZ zones
+- [ ] Walkability to transit for block groups (percentage of block group covered by transit walksheds)
+- Daily Departures by TAZ
+
 
 ## Requirements
 - PostgreSQL w/ PostGIS
@@ -30,7 +33,7 @@ Builds a PostgreSQL database, loads necessary data, completes analysis
 ### Run
 1. Clone the repo
     ``` cmd
-    git clone https://github.com/dvrpc/eta.git
+    git clone https://github.com/dvrpc/gis-eta.git
     ```
 2. Create a Python virtual environment with dependencies
 
