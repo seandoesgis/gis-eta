@@ -6,6 +6,7 @@
         "schools_private": "https://arcgis.dvrpc.org/portal/rest/services/Structures/schools_private_k12/FeatureServer/0/query?where=1=1&outFields=name&outSR=26918&f=geojson",
         "schools_public": "https://arcgis.dvrpc.org/portal/rest/services/Structures/schools_public_k12/FeatureServer/0/query?where=1=1&outFields=name&outSR=26918&f=geojson",
         "health_care": "https://arcgis.dvrpc.org/portal/rest/services/Structures/places/FeatureServer/0/query?where=taxonomy='health_and_medical'&outFields=primary_name,confidence&outSR=26918&f=geojson",
+        "senior_srv": "https://arcgis.dvrpc.org/portal/rest/services/Structures/places/FeatureServer/0/query?where=primary_category='senior_citizen_services'&outFields=primary_name,confidence&outSR=26918&f=geojson",
         "grocery_store": "https://arcgis.dvrpc.org/portal/rest/services/Structures/places/FeatureServer/0/query?where=primary_category+LIKE+%27%25grocery%25%27&outFields=primary_name,confidence&outSR=26918&f=geojson",
         "open_space": "https://arcgis.dvrpc.org/portal/rest/services/Planning/DVRPC_ProtectedOpenSpace2020/FeatureServer/0/query?where=1=1&outFields=os_type&outSR=26918&f=geojson",
         "trails": "https://arcgis.dvrpc.org/portal/rest/services/Transportation/circuittrails/FeatureServer/0/query?where=circuit+in+%28%27Existing%27%2C+%27In+Progress%27%29&outFields=circuit,name&outSR=26918&f=geojson"

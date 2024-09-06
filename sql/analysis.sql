@@ -41,6 +41,14 @@ COMMIT;
 CREATE OR REPLACE VIEW
     output.es_point_locations AS
 SELECT
+    'senior service' AS type,
+    ss.geometry
+FROM
+    input.senior_srv ss
+WHERE
+    ss.confidence >= 0.6
+UNION
+SELECT
     'food store' AS type,
     gs.geometry
 FROM
@@ -82,6 +90,7 @@ WITH
     es_pt AS (
         SELECT
             cb.geoid,
+            SUM(CASE WHEN es.type = 'senior service' THEN 1 ELSE 0 END) AS ss_cnt,
             SUM(CASE WHEN es.type = 'food store' THEN 1 ELSE 0 END) AS food_cnt,
             SUM(CASE WHEN es.type = 'health care' THEN 1 ELSE 0 END) AS hc_cnt,
             SUM(CASE WHEN es.type = 'school' THEN 1 ELSE 0 END) AS school_cnt
@@ -124,12 +133,13 @@ WITH
     )
 SELECT
     cb.geoid,
+    COALESCE(es.ss_cnt) as ss_cnt,
     COALESCE(es.food_cnt, 0) AS food_cnt,
     COALESCE(es.hc_cnt, 0) AS hc_cnt,
     COALESCE(es.school_cnt, 0) AS school_cnt,
     COALESCE(open_space.os_check, 0) AS os_check,
     COALESCE(trails.trail_cnt, 0) AS trail_cnt,
-    COALESCE(es.food_cnt, 0) + COALESCE(es.hc_cnt, 0) + COALESCE(open_space.os_check, 0) + COALESCE(es.school_cnt, 0) + COALESCE(trails.trail_cnt, 0) AS es_sum,
+    COALESCE(es.ss_cnt, 0) + COALESCE(es.food_cnt, 0) + COALESCE(es.hc_cnt, 0) + COALESCE(open_space.os_check, 0) + COALESCE(es.school_cnt, 0) + COALESCE(trails.trail_cnt, 0) AS es_sum,
     COALESCE(j.sum_jobs, 0) AS sum_jobs
 FROM
     input.census_blockgroups cb

@@ -11,6 +11,7 @@ Builds a PostgreSQL database, loads necessary data, completes analysis
 - Number of Households Below Poverty Line (Census ACS, blockgroup)
 - People 65 or Older (Census ACS, blockgroup)
 ### Essential Services
+- Senior Services and Care (Overture Maps)
 - Food Stores Grocery Stores (Overture Maps)
 - Health Care Facilities (Overture Maps)
 - Colleges/Universities, Private/Public Schools (National Center for Education Statistics, NCES)

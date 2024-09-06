@@ -42,7 +42,7 @@ census.load_lodes_data(dbname, schemas[0])
 
 with open(data_sources, 'r') as f:
     urls = json.load(f)
-gis_urls = f['gis_urls']
+gis_urls = urls['gis_urls']
 for url_key, url_value in gis_urls.items():
     load.load_gis_data(dbname, schemas[0], url_key, url_value, crs)
 
