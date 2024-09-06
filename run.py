@@ -1,5 +1,6 @@
 import db
 import census
+import gtfs
 import load
 import os
 import json
@@ -10,7 +11,7 @@ start_time = time.time()
 dbname = "eta"
 sql = "sql/analysis.sql"
 schemas = ["input", "output"]
-gis_sources = "source/data_sources.json"
+data_sources = "source/data_sources.json"
 crs = "EPSG:26918"
 
 acs_variables = [
@@ -39,11 +40,16 @@ census.load_acs_data(acs_variables, acs_year, acs_state_county_pairs, dbname, sc
 
 census.load_lodes_data(dbname, schemas[0])
 
-with open(gis_sources, 'r') as config_file:
-    urls_config = json.load(config_file)
-urls = urls_config['urls']
-for url_key, url_value in urls.items():
+with open(data_sources, 'r') as f:
+    urls = json.load(f)
+gis_urls = f['gis_urls']
+for url_key, url_value in gis_urls.items():
     load.load_gis_data(dbname, schemas[0], url_key, url_value, crs)
+
+gtfs.download_and_load_septagtfs(dbname, urls['gtfs_urls']['septa'])
+for url in urls['gtfs_urls']['nj_transit']:
+    gtfs.download_and_load_njtgtfs(dbname, url)
+gtfs.download_and_load_patcogtfs(dbname, urls['gtfs_urls']['patco'])
 
 load.load_matrix('source/AM_matrix_i_put.csv', 'source/AM_matrix_o_put.csv', dbname, schemas[0], 'matrix_45min')
 

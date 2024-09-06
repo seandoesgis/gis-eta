@@ -21,7 +21,7 @@ Builds a PostgreSQL database, loads necessary data, completes analysis
 - AM Transit 45 minute TAZ Matrix
 - Essential Services in 45 minute TAZ zones
 - [ ] Walkability to transit for block groups (percentage of block group covered by transit walksheds)
-- [ ] Daily Departures by TAZ
+- Daily Departures by TAZ
 
 
 ## Requirements
