@@ -9,7 +9,8 @@
         "senior_srv": "https://arcgis.dvrpc.org/portal/rest/services/Structures/places/FeatureServer/0/query?where=primary_category='senior_citizen_services'&outFields=primary_name,confidence&outSR=26918&f=geojson",
         "grocery_store": "https://arcgis.dvrpc.org/portal/rest/services/Structures/places/FeatureServer/0/query?where=primary_category+LIKE+%27%25grocery%25%27&outFields=primary_name,confidence&outSR=26918&f=geojson",
         "open_space": "https://arcgis.dvrpc.org/portal/rest/services/Planning/DVRPC_ProtectedOpenSpace2020/FeatureServer/0/query?where=1=1&outFields=os_type&outSR=26918&f=geojson",
-        "trails": "https://arcgis.dvrpc.org/portal/rest/services/Transportation/circuittrails/FeatureServer/0/query?where=circuit+in+%28%27Existing%27%2C+%27In+Progress%27%29&outFields=circuit,name&outSR=26918&f=geojson"
+        "trails": "https://arcgis.dvrpc.org/portal/rest/services/Transportation/circuittrails/FeatureServer/0/query?where=circuit+in+%28%27Existing%27%2C+%27In+Progress%27%29&outFields=circuit,name&outSR=26918&f=geojson",
+        "pedestrian_network": "https://opendata.arcgis.com/datasets/40186cee01824f11a407766e0cf32940_0.geojson"
     },
     "gtfs_urls": {
         "septa": "https://www3.septa.org/developer/gtfs_public.zip",
