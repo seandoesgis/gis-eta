@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, text, NullPool
 import pandas as pd
 from dotenv import load_dotenv
 import os
@@ -26,7 +26,7 @@ route_me = text(f"""
         shortest_path.agg_cost AS travel_time
     FROM
         pgr_drivingdistance (
-            'SELECT sw.id, sw.source, sw.target, sw.cost FROM network.sw_network_small sw',
+            'SELECT sw.id, sw.source, sw.target, sw.cost FROM network.sw_network sw',
             :source_node,
             CASE
                 WHEN :mode LIKE '%bus' THEN 420
@@ -56,7 +56,8 @@ def process_transit_poi(poi, dbname):
     each poi gets routed
     """
     engine = create_engine(
-    f"postgresql://{user}:{password}@{host}:{port}/{dbname}")
+    f"postgresql://{user}:{password}@{host}:{port}/{dbname}",
+    poolclass=NullPool)
 
     with engine.connect() as connection:
         connection.execute(route_me, {
@@ -66,5 +67,39 @@ def process_transit_poi(poi, dbname):
             'source_node': poi['source_node'],
             'mode': poi['mode']
         })
-        connection.close()
-        engine.dispose()
+    connection.close()
+    engine.dispose()
+    print(f"Processed POI {poi['id']}")
+
+
+def polys(dbname):
+    """
+    each poi gets routed
+    """
+    engine = create_engine(
+    f"postgresql://{user}:{password}@{host}:{port}/{dbname}")
+
+    iso = text("""
+        CREATE TABLE
+            network.transit_poi_isochrones AS
+        SELECT
+            tp.id,
+            tp.stop_id,
+            tp.gtfs,
+            ST_ConvexHull(ST_Collect(node.the_geom)) AS geom
+        FROM
+            network.transit_poi_paths tp
+        JOIN network.sw_network_vertices_pgr node ON tp.node_id = node.id
+        GROUP BY
+            tp.id, tp.stop_id, tp.gtfs;
+        COMMIT;   
+        CREATE INDEX isochrones_geom_idx
+        ON network.transit_poi_isochrones
+        USING GIST (geom);
+        COMMIT;
+        """)
+    with engine.connect() as connection:
+        connection.execute(iso)
+
+    connection.close()
+    engine.dispose()

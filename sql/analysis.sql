@@ -12,7 +12,7 @@ FROM
     input.acs_data;
 COMMIT;
 
--- rank vulnerable population inputs
+-- rank vulnerable population inputs, average the quantiles
 CREATE TABLE
     output.vul_pop_rank AS
 SELECT
@@ -20,7 +20,7 @@ SELECT
     NTILE(10) OVER (ORDER BY hh_pov) AS hh_pov_quantile,
     NTILE(10) OVER (ORDER BY hh1_dis) AS hh1_dis_quantile,
     NTILE(10) OVER (ORDER BY _65older) AS _65older_quantile,
-    (NTILE(10) OVER (ORDER BY hh_pov) + NTILE(10) OVER (ORDER BY hh1_dis) + NTILE(10) OVER (ORDER BY _65older)) / 3 AS vul_pop_rank -- average the 3 quantiles
+    (NTILE(10) OVER (ORDER BY hh_pov) + NTILE(10) OVER (ORDER BY hh1_dis) + NTILE(10) OVER (ORDER BY _65older)) / 3 AS vul_pop_rank
 FROM
     output.acs_bg a;
 COMMIT;
@@ -149,14 +149,14 @@ FROM
     LEFT JOIN output.lodes_jobs j ON cb.geoid = j.geoid;
 COMMIT;
 
--- rank essential services 
+-- rank essential services and average the quantiles
 CREATE TABLE
     output.es_rank AS
 SELECT
     ec.*,
     NTILE(10) OVER (ORDER BY es_sum) AS es_quantile,
     NTILE(10) OVER (ORDER BY sum_jobs) AS jobs_quantile,
-    (NTILE(10) OVER (ORDER BY es_sum) + NTILE(10) OVER (ORDER BY sum_jobs)) / 2 AS es_rank  -- average the 2 quantiles
+    (NTILE(10) OVER (ORDER BY es_sum) + NTILE(10) OVER (ORDER BY sum_jobs)) / 2 AS es_rank
 FROM
     output.es_count ec;
 COMMIT;
@@ -333,15 +333,6 @@ WHERE
     AND exception_type = 1
 UNION
 SELECT
-    service_id,
-    'septa_rail' AS gtfs
-FROM
-    septa_rail.calendar_dates
-WHERE
-    date = '20240904'
-    AND exception_type = 1
-UNION
-SELECT
     service_id::TEXT,
     'njt_bus' AS gtfs
 FROM
@@ -428,68 +419,82 @@ WHERE
     s.gtfs = 'patco';
 COMMIT;
 
+CREATE INDEX idx_septa_bus_stop_times_trip_id ON septa_bus.stop_times (trip_id);
+CREATE INDEX idx_septa_bus_stop_times_departure_time ON septa_bus.stop_times (departure_time);
+CREATE INDEX idx_septa_rail_stop_times_trip_id ON septa_rail.stop_times (trip_id);
+CREATE INDEX idx_septa_rail_stop_times_departure_time ON septa_rail.stop_times (departure_time);
+CREATE INDEX idx_njtransit_bus_stop_times_trip_id ON njtransit_bus.stop_times (trip_id);
+CREATE INDEX idx_njtransit_bus_stop_times_departure_time ON njtransit_bus.stop_times (departure_time);
+CREATE INDEX idx_njtransit_rail_stop_times_trip_id ON njtransit_rail.stop_times (trip_id);
+CREATE INDEX idx_njtransit_rail_stop_times_departure_time ON njtransit_rail.stop_times (departure_time);
+
+CREATE INDEX idx_all_trips_trip_id ON output.all_trips (trip_id);
+CREATE INDEX idx_all_trips_gtfs ON output.all_trips (gtfs);
+
 -- finding all stop times for service_id in the day time range from gtfs
 CREATE MATERIALIZED VIEW
     output.all_stop_times AS
+WITH a AS (
 SELECT
     st.stop_id,
     t.gtfs,
     t.route_id,
-    normalize_time (st.departure_time) AS departure_time
+    st.departure_time
 FROM
     septa_bus.stop_times st
     JOIN output.all_trips t ON st.trip_id::TEXT = t.trip_id
 WHERE
-    (normalize_time (st.departure_time) BETWEEN '00:00:00' AND '23:59:59')
-    AND t.gtfs = 'septa_bus'
+	t.gtfs = 'septa_bus'
 UNION
 SELECT
     st.stop_id,
     t.gtfs,
     t.route_id,
-    normalize_time (st.departure_time) AS departure_time
+    st.departure_time
 FROM
     septa_rail.stop_times st
     JOIN output.all_trips t ON st.trip_id::TEXT = t.trip_id
 WHERE
-    (normalize_time (st.departure_time) BETWEEN '00:00:00' AND '23:59:59')
-    AND t.gtfs = 'septa_rail'
+    t.gtfs = 'septa_rail'
 UNION
 SELECT
     st.stop_id,
     t.gtfs,
     t.route_id,
-    normalize_time (st.departure_time) AS departure_time
+    st.departure_time
 FROM
     njtransit_bus.stop_times st
     JOIN output.all_trips t ON st.trip_id::TEXT = t.trip_id
 WHERE
-    (normalize_time (st.departure_time) BETWEEN '00:00:00' AND '23:59:59')
-    AND t.gtfs = 'njt_bus'
+    t.gtfs = 'njt_bus'
 UNION
 SELECT
     st.stop_id,
     t.gtfs,
     t.route_id,
-    normalize_time (st.departure_time) AS departure_time
+    st.departure_time
 FROM
     njtransit_rail.stop_times st
     JOIN output.all_trips t ON st.trip_id::TEXT = t.trip_id
 WHERE
-    (normalize_time (st.departure_time) BETWEEN '00:00:00' AND '23:59:59')
-    AND t.gtfs = 'njt_rail'
+    t.gtfs = 'njt_rail'
 UNION
 SELECT
     st.stop_id,
     t.gtfs,
     t.route_id,
-    normalize_time (st.departure_time) AS departure_time
+    st.departure_time
 FROM
     patco.stop_times st
     JOIN output.all_trips t ON st.trip_id::TEXT = t.trip_id
 WHERE
-    (normalize_time (st.departure_time) BETWEEN '00:00:00' AND '23:59:59')
-    AND t.gtfs = 'patco';
+    t.gtfs = 'patco')
+SELECT 
+    * 
+FROM 
+    a 
+WHERE 
+    (normalize_time (departure_time) BETWEEN '00:00:00' AND '23:59:59')
 COMMIT;
 
 -- creating stops table with daily departure stats
@@ -558,10 +563,10 @@ ALTER TABLE network.sw_network
 ADD COLUMN id serial PRIMARY KEY;
 COMMIT;
 
-CREATE INDEX sw_network_geom_idx ON NETWORK.sw_network USING GIST (geometry);
+CREATE INDEX sw_network_geom_idx ON network.sw_network USING GIST (geometry);
 COMMIT;
 
--- topology
+-- creating and validating pedestrian network topology
 SELECT
     pgr_createTopology (
         'network.sw_network',
@@ -573,6 +578,9 @@ SELECT
 
 SELECT
     pgr_analyzeGraph ('network.sw_network', 0.001, 'geometry', 'id');
+
+CREATE INDEX sw_network_verts_geom_idx ON network.sw_network_vertices_pgr USING GIST (the_geom);
+COMMIT;
 
 -- creating transit poi for walksheds
 CREATE TABLE
@@ -593,7 +601,7 @@ FROM
         FROM
             network.sw_network_vertices_pgr AS sw
         WHERE
-            ST_DWithin (t.geom, sw.the_geom, 300) -- filters points within 50 meters of sw network node
+            ST_DWithin (t.geom, sw.the_geom, 300)
         ORDER BY
             ST_Distance (t.geom, sw.the_geom)
         LIMIT
@@ -614,3 +622,4 @@ CREATE TABLE
         node_id INTEGER,
         travel_time FLOAT
 );
+COMMIT;

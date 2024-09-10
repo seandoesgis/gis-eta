@@ -55,13 +55,14 @@ db.do_analysis(dbname, sql)
 
 pois = walkshed.get_transit_poi(dbname)
 with ThreadPoolExecutor() as executor: # parallel process batch of pois (may need to adjust max_workers for hardware)
-    future_to_poi = {executor.submit(walkshed.process_transit_poi, poi, 'eta'): poi for poi in pois}
+    future_to_poi = {executor.submit(walkshed.process_transit_poi, poi, dbname): poi for poi in pois}
     for future in as_completed(future_to_poi):
         poi = future_to_poi[future]
         try:
             future.result()
         except Exception as e:
             print(f"Error processing POI {poi['id']}: {e}") # sometimes pg can limit connections and such causing errors
+walkshed.polys(dbname)
 
 end_time = time.time()
 duration = end_time - start_time

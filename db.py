@@ -113,3 +113,6 @@ def do_analysis(dbname, sql):
                     break
         except:
             raise
+        
+    connection.close()
+    engine.dispose()
