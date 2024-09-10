@@ -254,13 +254,25 @@ CREATE MATERIALIZED VIEW
 SELECT
     s.stop_id,
     'septa_bus' AS gtfs,
+    CASE WHEN r.route_type = 3 THEN 'bus'
+        ELSE 'rail'
+        END AS mode,
     ST_Transform(ST_SetSRID(ST_Point(stop_lon, stop_lat), 4326), 26918)::geometry (POINT, 26918) AS geom
 FROM
     septa_bus.stops s
+JOIN septa_bus.stop_times st ON s.stop_id = st.stop_id
+    JOIN septa_bus.trips t ON st.trip_id = t.trip_id
+    JOIN septa_bus.routes r ON t.route_id = r.route_id
+GROUP BY
+    s.stop_id,
+    r.route_type,
+    s.stop_lon,
+    s.stop_lat
 UNION
 SELECT
     s.stop_id,
     'septa_rail' AS gtfs,
+    'rail' AS mode,
     ST_Transform(ST_SetSRID(ST_Point(stop_lon, stop_lat), 4326), 26918)::geometry (POINT, 26918) AS geom
 FROM
     septa_rail.stops s
@@ -268,6 +280,7 @@ UNION
 SELECT
     s.stop_id,
     'njt_rail' AS gtfs,
+    'rail' AS mode,
     ST_Transform(ST_SetSRID(ST_Point(stop_lon, stop_lat), 4326), 26918)::geometry (POINT, 26918) AS geom
 FROM
     njtransit_rail.stops s
@@ -275,6 +288,7 @@ UNION
 SELECT
     s.stop_id,
     'njt_bus' AS gtfs,
+    'bus' AS mode,
     ST_Transform(ST_SetSRID(ST_Point(stop_lon, stop_lat), 4326), 26918)::geometry (POINT, 26918) AS geom
 FROM
     njtransit_bus.stops s
@@ -282,6 +296,7 @@ UNION
 SELECT
     s.stop_id,
     'patco' AS gtfs,
+    'rail' AS mode,
     ST_Transform(ST_SetSRID(ST_Point(stop_lon, stop_lat), 4326), 26918)::geometry (POINT, 26918) AS geom
 FROM
     patco.stops s;
@@ -510,7 +525,7 @@ WITH
             COALESCE(SUM(s.tot_departures), 0) AS total_departures
         FROM
             INPUT.taz t
-            LEFT JOIN output.stops_w_departs s ON st_intersects (s.geom, t.geometry)
+            LEFT JOIN output.stops_w_departs s ON ST_Intersects(s.geom, t.geometry)
         GROUP BY
             t.taz,
             t.geometry
@@ -521,3 +536,81 @@ SELECT
 FROM
     taz_departs;
 COMMIT;
+
+-- creating route-able sidewalk network
+CREATE TABLE
+    network.sw_network AS
+SELECT
+    NULL::INTEGER AS source,
+    NULL::INTEGER AS target,
+    st_length (geom.geom) AS COST,
+    geom.geom AS geometry
+FROM
+    (
+        SELECT 
+            (ST_Dump (geometry)).geom
+        FROM
+            input.pedestrian_network
+    ) AS geom;
+COMMIT;
+
+ALTER TABLE network.sw_network
+ADD COLUMN id serial PRIMARY KEY;
+COMMIT;
+
+CREATE INDEX sw_network_geom_idx ON NETWORK.sw_network USING GIST (geometry);
+COMMIT;
+
+-- topology
+SELECT
+    pgr_createTopology (
+        'network.sw_network',
+        0.001,
+        'geometry',
+        'id',
+        clean := 'true'
+    );
+
+SELECT
+    pgr_analyzeGraph ('network.sw_network', 0.001, 'geometry', 'id');
+
+-- creating transit poi for walksheds
+CREATE TABLE
+    network.transit_poi AS
+SELECT
+    ROW_NUMBER() OVER (ORDER BY t.stop_id, t.gtfs ASC) AS id,
+    t.stop_id,
+    ST_ClosestPoint(t.geom, sw.the_geom) AS nearest_point,
+    sw.id AS source_node,
+    t.gtfs,
+    t.mode
+FROM
+    output.all_stops AS t
+    JOIN LATERAL (
+        SELECT
+            id,
+            the_geom
+        FROM
+            network.sw_network_vertices_pgr AS sw
+        WHERE
+            ST_DWithin (t.geom, sw.the_geom, 300) -- filters points within 50 meters of sw network node
+        ORDER BY
+            ST_Distance (t.geom, sw.the_geom)
+        LIMIT
+            1
+    ) AS sw ON TRUE;
+COMMIT;
+
+CREATE INDEX transit_poi_geom_idx
+ON network.transit_poi
+USING GIST (nearest_point);
+COMMIT;
+
+CREATE TABLE 
+    network.transit_poi_paths (
+        id INTEGER,
+        stop_id VARCHAR(20),
+        gtfs VARCHAR(20),
+        node_id INTEGER,
+        travel_time FLOAT
+);
