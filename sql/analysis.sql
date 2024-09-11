@@ -12,19 +12,6 @@ FROM
     input.acs_data;
 COMMIT;
 
--- rank vulnerable population inputs, average the quantiles
-CREATE TABLE
-    output.vul_pop_rank AS
-SELECT
-    a.*,
-    NTILE(10) OVER (ORDER BY hh_pov) AS hh_pov_quantile,
-    NTILE(10) OVER (ORDER BY hh1_dis) AS hh1_dis_quantile,
-    NTILE(10) OVER (ORDER BY _65older) AS _65older_quantile,
-    (NTILE(10) OVER (ORDER BY hh_pov) + NTILE(10) OVER (ORDER BY hh1_dis) + NTILE(10) OVER (ORDER BY _65older)) / 3 AS vul_pop_rank
-FROM
-    output.acs_bg a;
-COMMIT;
-
 -- summarize lodes job data by blockgroup
 CREATE OR REPLACE VIEW
     output.lodes_jobs AS
@@ -149,31 +136,6 @@ FROM
     LEFT JOIN output.lodes_jobs j ON cb.geoid = j.geoid;
 COMMIT;
 
--- rank essential services and average the quantiles
-CREATE TABLE
-    output.es_rank AS
-SELECT
-    ec.*,
-    NTILE(10) OVER (ORDER BY es_sum) AS es_quantile,
-    NTILE(10) OVER (ORDER BY sum_jobs) AS jobs_quantile,
-    (NTILE(10) OVER (ORDER BY es_sum) + NTILE(10) OVER (ORDER BY sum_jobs)) / 2 AS es_rank
-FROM
-    output.es_count ec;
-COMMIT;
-
--- calculate the difference of vulnerable population rank and essential service rank for access gap
-CREATE TABLE
-    output.access_gap_rank AS
-SELECT
-    vpr.geoid,
-    vpr.vul_pop_rank,
-    esr.es_rank,
-    vpr.vul_pop_rank - esr.es_rank AS access_gap_rank
-FROM
-    output.vul_pop_rank vpr
-    JOIN output.es_rank esr ON vpr.geoid = esr.geoid;
-COMMIT;
-
 -- AM transit travel zones within 45 minutes count
 CREATE OR REPLACE VIEW
     output.taz_transit_45min AS
@@ -197,32 +159,35 @@ COMMIT;
 
 -- essential Service count in AM transit travel zones within 45 minutes
 CREATE OR REPLACE VIEW
-    output.taz_45_es AS
+    output.taz_45_es AS   
 WITH
     taz_45 AS (
         SELECT
             o_taz,
             d_taz,
-            t.geometry
+            t.geometry AS dest_geometry
         FROM
             input.matrix_45min m
             JOIN input.taz t ON m.d_taz::INT = t.taz
     ),
     taz_45_es AS (
         SELECT
-            o_taz,
+            t.o_taz,
             COUNT(esl.geometry) AS es_cnt
         FROM
             taz_45 t
-            JOIN output.es_point_locations esl ON ST_Intersects(t.geometry, esl.geometry)
+        JOIN output.es_point_locations esl ON ST_Intersects(t.dest_geometry, esl.geometry)
         GROUP BY
-            o_taz
-    )
+            t.o_taz)
 SELECT
-    *,
-    NTILE(10) OVER (ORDER BY es_cnt) AS es_quantile
+    t45.o_taz,
+    t45.es_cnt,
+    NTILE(10) OVER (ORDER BY es_cnt) AS es_quantile,
+    t.geometry
 FROM
-    taz_45_es;
+    taz_45_es t45
+JOIN 
+	input.taz t ON t.taz = t45.o_taz;
 COMMIT;
 
 -- creating a function to normalize time from text field
@@ -312,7 +277,7 @@ FROM
     septa_bus.calendar
 WHERE
     wednesday = 1
-    AND 20240904 BETWEEN start_date AND end_date
+    AND 20240911 BETWEEN start_date AND end_date
 UNION
 SELECT
     service_id::TEXT,
@@ -321,7 +286,7 @@ FROM
     septa_rail.calendar
 WHERE
     wednesday = 1
-    AND 20240904 BETWEEN start_date AND end_date
+    AND 20240911 BETWEEN start_date AND end_date
 UNION
 SELECT
     service_id::TEXT,
@@ -329,7 +294,7 @@ SELECT
 FROM
     septa_bus.calendar_dates
 WHERE
-    date = '20240904'
+    date = '20240911'
     AND exception_type = 1
 UNION
 SELECT
@@ -338,7 +303,7 @@ SELECT
 FROM
     njtransit_bus.calendar_dates
 WHERE
-    date = 20240904
+    date = 20240911
     AND exception_type = 1
 UNION
 SELECT
@@ -347,7 +312,7 @@ SELECT
 FROM
     njtransit_rail.calendar_dates
 WHERE
-    date = 20240904
+    date = 20240911
     AND exception_type = 1
 UNION
 SELECT
@@ -357,7 +322,7 @@ FROM
     patco.calendar
 WHERE
     wednesday = 1
-    AND 20240904 BETWEEN start_date AND end_date;
+    AND 20240911 BETWEEN start_date AND end_date;
 COMMIT;
 
 -- finding all trip_ids for wednesday 9/4/24 service from gtfs     
@@ -494,7 +459,7 @@ SELECT
 FROM 
     a 
 WHERE 
-    (normalize_time (departure_time) BETWEEN '00:00:00' AND '23:59:59')
+    (normalize_time (departure_time) BETWEEN '00:00:00' AND '23:59:59');
 COMMIT;
 
 -- creating stops table with daily departure stats
@@ -530,16 +495,19 @@ WITH
             COALESCE(SUM(s.tot_departures), 0) AS total_departures
         FROM
             INPUT.taz t
-            LEFT JOIN output.stops_w_departs s ON ST_Intersects(s.geom, t.geometry)
+        JOIN output.stops_w_departs s ON ST_Intersects(s.geom, t.geometry)
         GROUP BY
             t.taz,
             t.geometry
     )
 SELECT
-    taz,
-    NTILE(10) OVER (ORDER BY total_departures) AS depart_quantile
+    td.taz,
+    NTILE(10) OVER (ORDER BY total_departures) AS depart_quantile,
+    t.geometry
 FROM
-    taz_departs;
+    taz_departs td
+JOIN
+    input.taz t ON t.taz = td.taz;
 COMMIT;
 
 -- creating route-able sidewalk network
