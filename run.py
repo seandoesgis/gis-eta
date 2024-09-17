@@ -43,11 +43,6 @@ gis_urls = urls['gis_urls']
 for url_key, url_value in gis_urls.items():
     load.load_gis_data(dbname, schemas[0], url_key, url_value, crs)
 
-gtfs.download_and_load_septagtfs(dbname, urls['gtfs_urls']['septa'])
-for url in urls['gtfs_urls']['nj_transit']:
-    gtfs.download_and_load_njtgtfs(dbname, url)
-gtfs.download_and_load_patcogtfs(dbname, urls['gtfs_urls']['patco'])
-
 load.load_matrix('source/AM_matrix_i_put.csv', 'source/AM_matrix_o_put.csv', dbname, schemas[0], 'matrix_45min')
 
 db.do_analysis(dbname, './sql/analysis.sql')

@@ -26,7 +26,6 @@ This repo builds a PostgreSQL database, loads necessary data, and completes the 
 - Walkability to transit percentage of block group covered by transit 15min rail and 5 minute bus walksheds (DVRPC pedestrian network, GTFS - SEPTA, NJTRANSIT, PATCO)
 - Daily Departures by TAZ (GTFS - SEPTA, NJTRANSIT, PATCO)
 
-
 ## Requirements
 - PostgreSQL w/ PostGIS, pgRouting
 - Python 3.11
@@ -36,7 +35,7 @@ This repo builds a PostgreSQL database, loads necessary data, and completes the 
 ### Run
 1. Clone the repo
     ``` cmd
-    git clone https://github.com/dvrpc/gis-eta.git
+    git clone https://github.com/dvrpc/eta.git
     ```
 2. Create a Python virtual environment with dependencies
 
