@@ -59,10 +59,26 @@ This repo builds a PostgreSQL database, loads necessary data, and completes the 
     copy .env_sample .env
     ```
     - edit .env environmental variables in VSCode and provide PostgreSQL/ArcGIS Portal credentials
-3. Edit variables in `run.py` if needed.  Default is sufficient, but can be customized.
+3. Edit variables in `run.py` as needed.  
+
+    **Variables and field names might also need to be adjusted/updated in `analysis.sql` if reran.**  An example of this would be service calendar dates for GTFS (lines 398, 407, 415, 424, 433, 443).  Data structure could change on some inputs in the future as well.
+
 4. Start the process
     ```
     python run.py
     ```
 
 ## Output
+
+All outputs are saved to the `output` schema in the database.  Scoring for each category is saved:
+
+- output.vul_pop_rank
+- output.es_rank
+- output.access_gap_rank
+- output.transit_rank
+
+and the total ETA scoring by blockgroup...
+
+- output.output
+
+Detailed metadata can be found here **insert metadata url ;)**
