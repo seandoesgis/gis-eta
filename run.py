@@ -11,7 +11,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 start_time = time.time()
 
 dbname = "eta"
-sql = "sql/analysis.sql"
 schemas = ["input", "network", "output"]
 data_sources = "source/data_sources.json"
 crs = "EPSG:26918"
@@ -51,7 +50,7 @@ gtfs.download_and_load_patcogtfs(dbname, urls['gtfs_urls']['patco'])
 
 load.load_matrix('source/AM_matrix_i_put.csv', 'source/AM_matrix_o_put.csv', dbname, schemas[0], 'matrix_45min')
 
-db.do_analysis(dbname, sql)
+db.do_analysis(dbname, './sql/analysis.sql')
 
 pois = walkshed.get_transit_poi(dbname)
 with ThreadPoolExecutor() as executor: # parallel process batch of pois (may need to adjust max_workers for hardware)
@@ -63,6 +62,8 @@ with ThreadPoolExecutor() as executor: # parallel process batch of pois (may nee
         except Exception as e:
             print(f"Error processing POI {poi['id']}: {e}") # sometimes pg can limit connections and such causing errors
 walkshed.polys(dbname)
+
+db.do_analysis(dbname, './sql/scoring.sql')
 
 end_time = time.time()
 duration = end_time - start_time
