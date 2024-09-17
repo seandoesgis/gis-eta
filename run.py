@@ -1,16 +1,18 @@
-import db
-import census
-import load
 import os
+import db
+import load
 import json
+import gtfs
 import time
+import census
+import walkshed
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 start_time = time.time()
 
 dbname = "eta"
-sql = "sql/analysis.sql"
-schemas = ["input", "output"]
-gis_sources = "source/data_sources.json"
+schemas = ["input", "network", "output"]
+data_sources = "source/data_sources.json"
 crs = "EPSG:26918"
 
 acs_variables = [
@@ -28,26 +30,35 @@ acs_state_county_pairs = [
     ("42", ["017", "029", "045", "091", "101"])   
 ]
 
+db.create_database(dbname)
+db.create_schemas(dbname, schemas)
+db.create_extensions(dbname)
 
-# db.create_database(dbname)
+census.load_acs_data(acs_variables, acs_year, acs_state_county_pairs, dbname, schemas[0])
+census.load_lodes_data(dbname, schemas[0])
 
-# db.create_schemas(dbname, schemas)
+with open(data_sources, 'r') as f:
+    urls = json.load(f)
+gis_urls = urls['gis_urls']
+for url_key, url_value in gis_urls.items():
+    load.load_gis_data(dbname, schemas[0], url_key, url_value, crs)
 
-# db.create_extensions(dbname)
+load.load_matrix('source/AM_matrix_i_put.csv', 'source/AM_matrix_o_put.csv', dbname, schemas[0], 'matrix_45min')
 
-# census.load_acs_data(acs_variables, acs_year, acs_state_county_pairs, dbname, schemas[0])
+db.do_analysis(dbname, './sql/analysis.sql')
 
-# census.load_lodes_data(dbname, schemas[0])
+pois = walkshed.get_transit_poi(dbname)
+with ThreadPoolExecutor() as executor: # parallel process batch of pois (may need to adjust max_workers for hardware)
+    future_to_poi = {executor.submit(walkshed.process_transit_poi, poi, dbname): poi for poi in pois}
+    for future in as_completed(future_to_poi):
+        poi = future_to_poi[future]
+        try:
+            future.result()
+        except Exception as e:
+            print(f"Error processing POI {poi['id']}: {e}") # sometimes pg can limit connections and such causing errors
+walkshed.polys(dbname)
 
-# with open(gis_sources, 'r') as config_file:
-#     urls_config = json.load(config_file)
-# urls = urls_config['urls']
-# for url_key, url_value in urls.items():
-#     load.load_gis_data(dbname, schemas[0], url_key, url_value, crs)
-
-# load.load_matrix('source/AM_matrix_i_put.csv', 'source/AM_matrix_o_put.csv', dbname, schemas[0], 'matrix_45min')
-
-db.do_analysis(dbname, sql)
+db.do_analysis(dbname, './sql/scoring.sql')
 
 end_time = time.time()
 duration = end_time - start_time
