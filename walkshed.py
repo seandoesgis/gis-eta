@@ -74,7 +74,7 @@ def process_transit_poi(poi, dbname):
 
 def polys(dbname):
     """
-    each poi gets routed
+    create the polygons for the walkshed paths
     """
     engine = create_engine(
     f"postgresql://{user}:{password}@{host}:{port}/{dbname}")

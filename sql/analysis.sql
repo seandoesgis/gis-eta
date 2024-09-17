@@ -1,3 +1,28 @@
+-- create census blockgroup to muni crosswalk
+CREATE OR REPLACE VIEW
+    output.bg_muni_crosswalk AS
+WITH
+    muni_cnt AS (
+        SELECT
+            cb.geoid,
+            cm.namelsad AS muni_name,
+            ROW_NUMBER() OVER (PARTITION BY cb.geoid ORDER BY ST_Area(ST_Intersection(cb.geometry, cm.geometry)) DESC) AS muni_cnt
+        FROM
+            input.census_blockgroups cb
+            LEFT JOIN input.census_munis cm ON st_intersects (cb.geometry, cm.geometry)
+        WHERE
+            ST_Area(ST_Intersection(cb.geometry, cm.geometry)) > 0
+    )
+SELECT
+    geoid,
+    MAX(CASE WHEN muni_cnt = 1 THEN INITCAP(muni_name) END) AS mun1,
+    MAX(CASE WHEN muni_cnt = 2 THEN INITCAP(muni_name) END) AS mun2
+FROM
+    muni_cnt
+GROUP BY
+    geoid;
+COMMIT;
+
 -- apply acs data to blockgroup
 CREATE OR REPLACE VIEW
     output.acs_bg AS
@@ -10,19 +35,6 @@ SELECT
     CONCAT(state, county, tract, "block group") AS geoid
 FROM
     input.acs_data;
-COMMIT;
-
--- rank vulnerable population inputs, average the quantiles
-CREATE TABLE
-    output.vul_pop_rank AS
-SELECT
-    a.*,
-    NTILE(10) OVER (ORDER BY hh_pov) AS hh_pov_quantile,
-    NTILE(10) OVER (ORDER BY hh1_dis) AS hh1_dis_quantile,
-    NTILE(10) OVER (ORDER BY _65older) AS _65older_quantile,
-    (NTILE(10) OVER (ORDER BY hh_pov) + NTILE(10) OVER (ORDER BY hh1_dis) + NTILE(10) OVER (ORDER BY _65older)) / 3 AS vul_pop_rank
-FROM
-    output.acs_bg a;
 COMMIT;
 
 -- summarize lodes job data by blockgroup
@@ -149,80 +161,151 @@ FROM
     LEFT JOIN output.lodes_jobs j ON cb.geoid = j.geoid;
 COMMIT;
 
--- rank essential services and average the quantiles
-CREATE TABLE
-    output.es_rank AS
+-- blockgroup/taz translation weighted average
+CREATE OR REPLACE VIEW
+    output.bg_to_taz AS
 SELECT
-    ec.*,
-    NTILE(10) OVER (ORDER BY es_sum) AS es_quantile,
-    NTILE(10) OVER (ORDER BY sum_jobs) AS jobs_quantile,
-    (NTILE(10) OVER (ORDER BY es_sum) + NTILE(10) OVER (ORDER BY sum_jobs)) / 2 AS es_rank
+    t.taz,
+    cb.geoid,
+    ST_Area (cb.geometry) AS cb_total_area,
+    ST_Area (ST_Intersection (t.geometry, cb.geometry)) AS intersection_area,
+    ST_Area (ST_Intersection (cb.geometry, t.geometry)) / ST_Area (cb.geometry) AS intersection_percent
 FROM
-    output.es_count ec;
-COMMIT;
-
--- calculate the difference of vulnerable population rank and essential service rank for access gap
-CREATE TABLE
-    output.access_gap_rank AS
-SELECT
-    vpr.geoid,
-    vpr.vul_pop_rank,
-    esr.es_rank,
-    vpr.vul_pop_rank - esr.es_rank AS access_gap_rank
-FROM
-    output.vul_pop_rank vpr
-    JOIN output.es_rank esr ON vpr.geoid = esr.geoid;
+    input.taz t
+RIGHT JOIN 
+    input.census_blockgroups cb ON ST_Intersects (cb.geometry, t.geometry);
 COMMIT;
 
 -- AM transit travel zones within 45 minutes count
 CREATE OR REPLACE VIEW
-    output.taz_transit_45min AS
+    output.transit_45min AS
 WITH
     zone_count AS (
-        SELECT DISTINCT (o_taz),
+        SELECT DISTINCT
+            (o_taz),
             COUNT(*) AS t_45min_zone_cnt
         FROM
-            input.matrix_45min
+            INPUT.matrix_45min
         GROUP BY
             o_taz
+    ),
+    weighted_avg AS (
+        SELECT DISTINCT
+            geoid,
+            ROUND(SUM(t_45min_zone_cnt * intersection_percent)) AS t_45min_zone_cnt
+        FROM
+            zone_count zc
+            JOIN output.bg_to_taz bg ON zc.o_taz = bg.taz
+        GROUP BY
+            geoid
     )
 SELECT
-    z.*,
-    NTILE(10) OVER (ORDER BY t_45min_zone_cnt) AS t_zone_quantile,
-    t.geometry
+    *,
+    NTILE(10) OVER (ORDER BY t_45min_zone_cnt DESC) AS t_zone_quantile
 FROM
-    zone_count z
-    JOIN input.taz t ON z.o_taz = t.taz;
+    weighted_avg;
 COMMIT;
 
 -- essential Service count in AM transit travel zones within 45 minutes
 CREATE OR REPLACE VIEW
-    output.taz_45_es AS
+    output.transit_45_es AS   
 WITH
     taz_45 AS (
         SELECT
             o_taz,
             d_taz,
-            t.geometry
+            t.geometry AS dest_geometry
         FROM
-            input.matrix_45min m
-            JOIN input.taz t ON m.d_taz::INT = t.taz
+            INPUT.matrix_45min m
+            JOIN INPUT.taz t ON m.d_taz::INT = t.taz
     ),
     taz_45_es AS (
         SELECT
-            o_taz,
+            t.o_taz,
             COUNT(esl.geometry) AS es_cnt
         FROM
             taz_45 t
-            JOIN output.es_point_locations esl ON ST_Intersects(t.geometry, esl.geometry)
+            JOIN output.es_point_locations esl ON ST_Intersects (t.dest_geometry, esl.geometry)
         GROUP BY
-            o_taz
+            t.o_taz
+    ),
+    weighted_avg AS (
+        SELECT DISTINCT
+            geoid,
+            ROUND(SUM(es_cnt * intersection_percent)) AS es_cnt
+        FROM
+            taz_45_es t
+            JOIN output.bg_to_taz bg ON t.o_taz = bg.taz
+        GROUP BY
+            geoid
     )
 SELECT
     *,
-    NTILE(10) OVER (ORDER BY es_cnt) AS es_quantile
+    NTILE(10) OVER (ORDER BY es_cnt DESC) AS t_es_quantile
 FROM
-    taz_45_es;
+    weighted_avg;
+COMMIT;
+
+-- lodes job count in AM transit travel zones within 45 minutes
+CREATE OR REPLACE VIEW
+    output.transit_45_jobs as   
+WITH
+    taz_45 AS (
+        SELECT
+            o_taz,
+            d_taz
+        FROM
+            INPUT.matrix_45min m
+            JOIN INPUT.taz t ON m.d_taz::INT = t.taz
+    ),
+    weighted_avg AS (
+        SELECT DISTINCT
+            o_taz,
+            d_taz,
+            geoid,
+            intersection_percent
+        FROM
+            taz_45 t
+            JOIN output.bg_to_taz bg ON t.d_taz = bg.taz::TEXT
+    ),
+    jobs_added AS (
+        SELECT
+            wa.o_taz,
+            ROUND(SUM(lj.sum_jobs * intersection_percent)) AS jobs
+        FROM
+            weighted_avg wa
+            JOIN output.lodes_jobs lj ON wa.geoid = lj.geoid
+        GROUP BY
+            wa.o_taz
+    ),
+    bg_45_jobs AS (
+        SELECT
+            bg.geoid,
+            SUM(ja.jobs * intersection_percent) AS jobs
+        FROM
+            jobs_added ja
+            JOIN output.bg_to_taz bg ON ja.o_taz = bg.taz
+        GROUP BY
+            bg.geoid
+    )
+SELECT
+    j.*,
+    NTILE(10) OVER (ORDER BY jobs DESC) AS t_jobs_quantile,
+    cb.geometry
+FROM
+    bg_45_jobs j
+JOIN INPUT.census_blockgroups cb ON cb.geoid = j.geoid;
+COMMIT;
+
+-- avg essential services and jobs within transit 45min
+CREATE VIEW
+    output.transit_45_es_job AS
+SELECT
+    tj.geoid,
+    (tj.t_jobs_quantile + te.t_es_quantile) / 2 AS t_45_es_job_avg
+FROM
+    output.transit_45_jobs tj
+    JOIN output.transit_45_es te ON tj.geoid = te.geoid;
 COMMIT;
 
 -- creating a function to normalize time from text field
@@ -312,7 +395,7 @@ FROM
     septa_bus.calendar
 WHERE
     wednesday = 1
-    AND 20240904 BETWEEN start_date AND end_date
+    AND 20240911 BETWEEN start_date AND end_date
 UNION
 SELECT
     service_id::TEXT,
@@ -321,7 +404,7 @@ FROM
     septa_rail.calendar
 WHERE
     wednesday = 1
-    AND 20240904 BETWEEN start_date AND end_date
+    AND 20240911 BETWEEN start_date AND end_date
 UNION
 SELECT
     service_id::TEXT,
@@ -329,7 +412,7 @@ SELECT
 FROM
     septa_bus.calendar_dates
 WHERE
-    date = '20240904'
+    date = '20240911'
     AND exception_type = 1
 UNION
 SELECT
@@ -338,7 +421,7 @@ SELECT
 FROM
     njtransit_bus.calendar_dates
 WHERE
-    date = 20240904
+    date = 20240911
     AND exception_type = 1
 UNION
 SELECT
@@ -347,7 +430,7 @@ SELECT
 FROM
     njtransit_rail.calendar_dates
 WHERE
-    date = 20240904
+    date = 20240911
     AND exception_type = 1
 UNION
 SELECT
@@ -357,7 +440,7 @@ FROM
     patco.calendar
 WHERE
     wednesday = 1
-    AND 20240904 BETWEEN start_date AND end_date;
+    AND 20240911 BETWEEN start_date AND end_date;
 COMMIT;
 
 -- finding all trip_ids for wednesday 9/4/24 service from gtfs     
@@ -494,7 +577,7 @@ SELECT
 FROM 
     a 
 WHERE 
-    (normalize_time (departure_time) BETWEEN '00:00:00' AND '23:59:59')
+    (normalize_time (departure_time) BETWEEN '00:00:00' AND '23:59:59');
 COMMIT;
 
 -- creating stops table with daily departure stats
@@ -520,26 +603,27 @@ CREATE INDEX stops_w_departs_idx
   USING GIST (geom);
 COMMIT;
 
--- calculate daily departs per taz
+-- calculate daily departs per blockgroup
 CREATE OR REPLACE VIEW
-    output.taz_departs AS
+    output.transit_departs AS
 WITH
-    taz_departs AS (
+    bg_departs AS (
         SELECT
-            t.taz,
-            COALESCE(SUM(s.tot_departures), 0) AS total_departures
+            cb.geoid,
+            COALESCE(SUM(s.tot_departures), 0) AS total_departures,
+            cb.geometry
         FROM
-            INPUT.taz t
-            LEFT JOIN output.stops_w_departs s ON ST_Intersects(s.geom, t.geometry)
+            input.census_blockgroups cb
+        LEFT JOIN output.stops_w_departs s ON ST_Intersects(s.geom, cb.geometry)
         GROUP BY
-            t.taz,
-            t.geometry
+            cb.geoid, cb.geometry
     )
 SELECT
-    taz,
-    NTILE(10) OVER (ORDER BY total_departures) AS depart_quantile
+    bgd.geoid,
+    total_departures,
+    NTILE(10) OVER (ORDER BY total_departures DESC) AS depart_quantile
 FROM
-    taz_departs;
+    bg_departs bgd
 COMMIT;
 
 -- creating route-able sidewalk network

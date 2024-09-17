@@ -55,12 +55,8 @@ def fetch_portal_token():
         if not token:
             raise ValueError("Failed to retrieve token.")
         return token
-    except requests.exceptions.RequestException as e:
-        print(f"Error requesting token: {e}")
-        raise
-    except ValueError as e:
-        print(e)
-        raise
+    except requests.RequestException as e:
+        raise SystemError(f"An error occurred while fetching the token: {e}")
 
 
 def load_gis_data(dbname, target_schema, url_key, url, crs):
