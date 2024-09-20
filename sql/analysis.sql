@@ -29,9 +29,9 @@ CREATE OR REPLACE VIEW
 SELECT
     b11001_001e::INT AS hh,
     b01003_001e::INT AS pop,
-    b22010_006e::INT + b22010_003e::INT AS hh1_dis,
+    b22010_006e::INT + b22010_003e::INT AS hh_dis,
     b17017_002e::INT AS hh_pov,
-    b01001_020e::INT + b01001_021e::INT + b01001_022e::INT + b01001_023e::INT + b01001_024e::INT + b01001_025e::INT + b01001_044e::INT + b01001_045e::INT + b01001_046e::INT + b01001_047e::INT + b01001_048e::INT + b01001_049e::INT AS _65older,
+    b01001_020e::INT + b01001_021e::INT + b01001_022e::INT + b01001_023e::INT + b01001_024e::INT + b01001_025e::INT + b01001_044e::INT + b01001_045e::INT + b01001_046e::INT + b01001_047e::INT + b01001_048e::INT + b01001_049e::INT AS pop65,
     CONCAT(state, county, tract, "block group") AS geoid
 FROM
     input.acs_data;
