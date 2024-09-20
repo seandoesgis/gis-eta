@@ -4,9 +4,9 @@ CREATE TABLE
 SELECT
     a.*,
     NTILE(10) OVER (ORDER BY hh_pov) AS hh_pov_quantile,
-    NTILE(10) OVER (ORDER BY hh1_dis) AS hh1_dis_quantile,
-    NTILE(10) OVER (ORDER BY _65older) AS _65older_quantile,
-    (NTILE(10) OVER (ORDER BY hh_pov) + NTILE(10) OVER (ORDER BY hh1_dis) + NTILE(10) OVER (ORDER BY _65older)) / 3 AS vul_pop_rank
+    NTILE(10) OVER (ORDER BY hh_dis) AS hh_dis_quantile,
+    NTILE(10) OVER (ORDER BY pop65) AS pop65_quantile,
+    (NTILE(10) OVER (ORDER BY hh_pov) + NTILE(10) OVER (ORDER BY hh_dis) + NTILE(10) OVER (ORDER BY pop65)) / 3 AS vul_pop_rank
 FROM
     output.acs_bg a;
 COMMIT;
@@ -101,9 +101,9 @@ CREATE TABLE output.output as
         bmc.mun2,
         vpr.hh, 
         vpr.pop, 
-        vpr.hh1_dis, 
+        vpr.hh_dis, 
         vpr.hh_pov, 
-        vpr."_65older",
+        vpr.pop65,
         vpr.vul_pop_rank,
         er.ss_cnt,
         er.food_cnt,
