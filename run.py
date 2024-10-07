@@ -1,8 +1,8 @@
 import os
 import db
 import load
-import json
 import gtfs
+import json
 import time
 import census
 import walkshed
@@ -40,22 +40,24 @@ census.load_lodes_data(dbname, schemas[0])
 with open(data_sources, 'r') as f:
     urls = json.load(f)
 gis_urls = urls['gis_urls']
+gtfs_urls = urls['gtfs_urls']
+
 for url_key, url_value in gis_urls.items():
     load.load_gis_data(dbname, schemas[0], url_key, url_value, crs)
+
+if 'septa' in gtfs_urls:
+    gtfs.download_and_load_septagtfs(dbname, gtfs_urls['septa'])  
+if 'nj_transit' in gtfs_urls:
+    for url in gtfs_urls['nj_transit']:
+        gtfs.download_and_load_njtgtfs(dbname, url)
+if 'patco' in gtfs_urls:
+    gtfs.download_and_load_patcogtfs(dbname, gtfs_urls['patco'])
 
 load.load_matrix('source/AM_matrix_i_put.csv', 'source/AM_matrix_o_put.csv', dbname, schemas[0], 'matrix_45min')
 
 db.do_analysis(dbname, './sql/analysis.sql')
 
 pois = walkshed.get_transit_poi(dbname)
-with ThreadPoolExecutor() as executor: # parallel process batch of pois (may need to adjust max_workers for hardware)
-    future_to_poi = {executor.submit(walkshed.process_transit_poi, poi, dbname): poi for poi in pois}
-    for future in as_completed(future_to_poi):
-        poi = future_to_poi[future]
-        try:
-            future.result()
-        except Exception as e:
-            print(f"Error processing POI {poi['id']}: {e}") # sometimes pg can limit connections and such causing errors
 walkshed.polys(dbname)
 
 db.do_analysis(dbname, './sql/scoring.sql')

@@ -119,49 +119,6 @@ def load_gis_data(dbname, target_schema, url_key, url, crs):
         gdf.to_postgis(url_key.lower(), engine, schema=target_schema, if_exists='replace', index=False)
 
 
-def download_and_load_gtfs(dbname, gtfs_url):
-    """
-    downloads, extracts, loads septa gtfs into the db
-    """
-    print("\t -> Loading SEPTA GTFS data...")
-    response = requests.get(gtfs_url)
-    zip_content = io.BytesIO(response.content)
-
-    with zipfile.ZipFile(zip_content, 'r') as zip_ref:
-        zip_ref.extractall('gtfs')
-
-    zip_files = [file for file in os.listdir('gtfs') if file.endswith(".zip")]
-    for zip in zip_files:
-        path = os.path.join('gtfs', zip)
-        file_name = os.path.splitext(path)[0] 
-        os.mkdir(file_name) 
-        with zipfile.ZipFile(path, 'r') as zip_ref:
-            zip_ref.extractall(os.path.join(file_name))
-
-    schemas = {'google_bus', 'google_rail'}
-
-    engine = create_engine(f"postgresql://{user}:{password}@{host}:{port}/{dbname}")
-    conn = psycopg2.connect(
-        host=host, port=port, database=dbname, user=user, password=password
-    )
-    cur = conn.cursor()
-    conn.autocommit = True
-
-    for schema in schemas:
-        cur.execute(f"SELECT 1 FROM pg_namespace WHERE nspname='{schema}'")
-        schema_exists = bool(cur.rowcount)
-        if not schema_exists:
-            cur.execute(f"CREATE SCHEMA {schema};")
-
-        for file_name in os.listdir(os.path.join('gtfs', schema)):
-            if file_name.endswith('.txt'):
-                file_path = os.path.join('gtfs', schema, file_name)
-                table_name = os.path.splitext(file_name)[0]
-
-                df = pd.read_csv(file_path)
-                df.to_sql(table_name, engine, schema=schema, if_exists='replace', index=False)
-
-
 def csv_table(dbname, target_schema, csv):
     """
     Loads the csv into database.

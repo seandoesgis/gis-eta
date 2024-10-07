@@ -53,6 +53,7 @@ COMMIT;
 CREATE OR REPLACE VIEW
     output.es_point_locations AS
 SELECT
+    primary_name as name,
     'senior service' AS type,
     ss.geometry
 FROM
@@ -61,6 +62,7 @@ WHERE
     ss.confidence >= 0.6
 UNION
 SELECT
+    primary_name as name,
     'food store' AS type,
     gs.geometry
 FROM
@@ -69,6 +71,7 @@ WHERE
     gs.confidence >= 0.6
 UNION
 SELECT
+    primary_name as name,
     'health care' AS type,
     hc.geometry
 FROM
@@ -77,18 +80,21 @@ WHERE
     hc.confidence >= 0.6
 UNION
 SELECT
+    name,
     'school' AS type,
     sps.geometry
 FROM
     input.schools_post_secondary sps
 UNION
 SELECT
+    name,
     'school' AS type,
     spr.geometry
 FROM
     input.schools_private spr
 UNION
 SELECT
+    name,
     'school' AS type,
     sp.geometry
 FROM
