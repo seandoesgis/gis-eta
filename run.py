@@ -58,6 +58,14 @@ load.load_matrix('source/AM_matrix_i_put.csv', 'source/AM_matrix_o_put.csv', dbn
 db.do_analysis(dbname, './sql/analysis.sql')
 
 pois = walkshed.get_transit_poi(dbname)
+with ThreadPoolExecutor() as executor: # parallel process batch of pois (may need to adjust max_workers for hardware)
+    future_to_poi = {executor.submit(walkshed.process_transit_poi, poi, dbname): poi for poi in pois}
+    for future in as_completed(future_to_poi):
+        poi = future_to_poi[future]
+        try:
+            future.result()
+        except Exception as e:
+            print(f"Error processing POI {poi['id']}: {e}") # sometimes pg can limit connections and such causing errors
 walkshed.polys(dbname)
 
 db.do_analysis(dbname, './sql/scoring.sql')
